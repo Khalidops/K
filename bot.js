@@ -1,71 +1,55 @@
+// bot.js
+
 const TelegramBot = require('node-telegram-bot-api');
-const { botToken, chatId, lang, soundAlert, timeFrames } = require('./config');
-const { sendTelegramAlert } = require('./utils/notifier');
-const analyzeMarket = require('./analyzer/marketAnalyzer');
-const candlesData = require('./data/mockCandles');
+const { analyzeMarket } = require('./analyzer');
+require('dotenv').config();
 
-const startCommand = require('./commands/start');
-const stopCommand = require('./commands/stop');
-const statusCommand = require('./commands/status');
-const settingsCommand = require('./commands/settings');
+const token = process.env.BOT_TOKEN;
+const userId = process.env.USER_CHAT_ID;
 
-let isRunning = false;
-let interval;
+const bot = new TelegramBot(token, { polling: true });
 
-const bot = new TelegramBot(botToken, { polling: true });
+// إعدادات المستخدم
+const lang = process.env.LANG || 'ar';
+const audioEnabled = process.env.AUDIO_ALERT === 'true';
+const interval = parseInt(process.env.ANALYZE_INTERVAL || '60'); // بالثواني
 
-bot.onText(/\/start/, (msg) => {
-  startCommand(bot, msg);
-  isRunning = true;
-  if (!interval) startMonitoring();
-});
-
-bot.onText(/\/stop/, (msg) => {
-  stopCommand(bot, msg);
-  isRunning = false;
-  clearInterval(interval);
-  interval = null;
-});
-
-bot.onText(/\/status/, (msg) => {
-  statusCommand(bot, msg, isRunning);
-});
-
-bot.onText(/\/settings/, (msg) => {
-  settingsCommand(bot, msg, { lang, soundAlert, timeFrames });
-});
-
-const startMonitoring = () => {
-  interval = setInterval(() => {
-    if (!isRunning) return;
-
-    const symbols = Object.keys(candlesData['1']); // نفترض جميع الفريمات تحتوي نفس العملات
-
-    symbols.forEach((symbol) => {
-      const result = analyzeMarket(symbol, candlesData);
-      if (result) {
-        const { signal, strategy, indicators, price, time, timeFrame } = result;
-
-        // تعديل الوقت إلى توقيت السعودية +3 ساعات
-        const date = new Date(time);
-        date.setHours(date.getHours() + 3);
-        const formattedTime = date.toLocaleString('ar-EG');
-
-        const message = `
-📊 *إشارة جديدة*  
-العملة: *${symbol}*  
-الإستراتيجية: *${strategy}*  
-الإشارة: *${signal === 'buy' ? 'شراء 🔼' : 'بيع 🔽'}*  
-السعر: *${price}*
-مدة الصفقة المقترحة: *${timeFrame} دقيقة*
-الوقت: *${formattedTime}*
-RSI: ${indicators.rsi} | EMA: ${indicators.ema} | MACD: ${indicators.macd.histogram}
-        `.trim();
-
-        sendTelegramAlert(message);
-      }
-    });
-  }, 60 * 1000);
+// رسائل بوت ذكية
+const messages = {
+  ar: {
+    welcome: '🤖 تم تفعيل بوت التداول بنجاح.\nسيتم تنبيهك بالفرص القوية تلقائيًا.',
+    opportunity: (symbol, direction, strength) =>
+      `📈 فرصة ${direction === 'buy' ? 'شراء' : 'بيع'} قوية على ${symbol}\nالقوة: ${strength}%`,
+  },
+  en: {
+    welcome: '🤖 Trading bot activated.\nYou will receive strong signals automatically.',
+    opportunity: (symbol, direction, strength) =>
+      `📈 ${direction === 'buy' ? 'Buy' : 'Sell'} signal on ${symbol}\nStrength: ${strength}%`,
+  },
 };
 
-console.log('🤖 البوت يعمل الآن...');
+// أمر /start
+bot.onText(/\/start/, (msg) => {
+  if (msg.chat.id.toString() !== userId) return;
+  bot.sendMessage(msg.chat.id, messages[lang].welcome);
+});
+
+// تحليل السوق كل X ثانية
+setInterval(async () => {
+  try {
+    const results = await analyzeMarket(); // تحليل العملات كلها
+
+    for (const result of results) {
+      if (result.strong) {
+        const message = messages[lang].opportunity(result.symbol, result.direction, result.strength);
+        bot.sendMessage(userId, message);
+
+        if (audioEnabled) {
+          bot.sendVoice(userId, './assets/alert.ogg'); // تأكد من وجود هذا الملف
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ خطأ أثناء التحليل:', err.message);
+  }
+}, interval * 1000);
