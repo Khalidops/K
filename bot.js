@@ -1,10 +1,8 @@
 const TelegramBot = require('node-telegram-bot-api');
-const fs = require('fs');
-const path = require('path');
-const { botToken, chatId, lang, soundAlert } = require('./config');
+const { botToken, chatId, lang, soundAlert, timeFrames } = require('./config');
 const { sendTelegramAlert } = require('./utils/notifier');
 const analyzeMarket = require('./analyzer/marketAnalyzer');
-const candlesData = require('./data/mockCandles'); // مؤقتاً حتى يتم ربط API فعلي
+const candlesData = require('./data/mockCandles');
 
 const startCommand = require('./commands/start');
 const stopCommand = require('./commands/stop');
@@ -34,19 +32,24 @@ bot.onText(/\/status/, (msg) => {
 });
 
 bot.onText(/\/settings/, (msg) => {
-  settingsCommand(bot, msg, { lang, soundAlert });
+  settingsCommand(bot, msg, { lang, soundAlert, timeFrames });
 });
 
 const startMonitoring = () => {
   interval = setInterval(() => {
     if (!isRunning) return;
 
-    const symbols = Object.keys(candlesData);
+    const symbols = Object.keys(candlesData['1']); // نفترض جميع الفريمات تحتوي نفس العملات
+
     symbols.forEach((symbol) => {
-      const candles = candlesData[symbol];
-      const result = analyzeMarket(symbol, candles);
+      const result = analyzeMarket(symbol, candlesData);
       if (result) {
-        const { signal, strategy, indicators, price, time } = result;
+        const { signal, strategy, indicators, price, time, timeFrame } = result;
+
+        // تعديل الوقت إلى توقيت السعودية +3 ساعات
+        const date = new Date(time);
+        date.setHours(date.getHours() + 3);
+        const formattedTime = date.toLocaleString('ar-EG');
 
         const message = `
 📊 *إشارة جديدة*  
@@ -54,14 +57,15 @@ const startMonitoring = () => {
 الإستراتيجية: *${strategy}*  
 الإشارة: *${signal === 'buy' ? 'شراء 🔼' : 'بيع 🔽'}*  
 السعر: *${price}*
-الوقت: *${new Date(time).toLocaleString('ar-EG')}*
+مدة الصفقة المقترحة: *${timeFrame} دقيقة*
+الوقت: *${formattedTime}*
 RSI: ${indicators.rsi} | EMA: ${indicators.ema} | MACD: ${indicators.macd.histogram}
         `.trim();
 
         sendTelegramAlert(message);
       }
     });
-  }, 60 * 1000); // كل دقيقة
+  }, 60 * 1000);
 };
 
 console.log('🤖 البوت يعمل الآن...');
