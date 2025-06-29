@@ -2,7 +2,6 @@
 
 const TelegramBot = require('node-telegram-bot-api');
 const { analyzeMarket } = require('./analyzer/marketAnalyzer');
-
 require('dotenv').config();
 
 const token = process.env.BOT_TOKEN;
@@ -15,7 +14,7 @@ const lang = process.env.LANG || 'ar';
 const audioEnabled = process.env.AUDIO_ALERT === 'true';
 const interval = parseInt(process.env.ANALYZE_INTERVAL || '60'); // بالثواني
 
-// رسائل بوت ذكية
+// رسائل البوت
 const messages = {
   ar: {
     welcome: '🤖 تم تفعيل بوت التداول بنجاح.\nسيتم تنبيهك بالفرص القوية تلقائيًا.',
@@ -38,7 +37,7 @@ bot.onText(/\/start/, (msg) => {
 // تحليل السوق كل X ثانية
 setInterval(async () => {
   try {
-    const results = await analyzeMarket(); // تحليل العملات كلها
+    const results = await analyzeMarket();
 
     for (const result of results) {
       if (result.strong) {
@@ -46,7 +45,7 @@ setInterval(async () => {
         bot.sendMessage(userId, message);
 
         if (audioEnabled) {
-          bot.sendVoice(userId, './assets/alert.ogg'); // تأكد من وجود هذا الملف
+          bot.sendVoice(userId, './assets/alert.ogg'); // تأكد من وجود الملف
         }
       }
     }
