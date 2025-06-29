@@ -1,11 +1,19 @@
 // bot.js
 
 const TelegramBot = require('node-telegram-bot-api');
-const { analyzeMarket } = require('./analyzer/marketAnalyzer');
 require('dotenv').config();
+const { analyzeMarket } = require('./analyzer/marketAnalyzer');
 
+// ✅ تأكيد قراءة التوكن من المتغير البيئي الصحيح
 const token = process.env.BOT_TOKEN;
 const userId = process.env.USER_CHAT_ID;
+
+if (!token) {
+  console.error('❌ لم يتم العثور على التوكن. تأكد من تعيين BOT_TOKEN في Replit Secrets');
+  process.exit(1); // إيقاف التشغيل إذا ما فيه توكن
+}
+
+console.log('✅ التوكن تم تحميله بنجاح');
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -30,11 +38,17 @@ const messages = {
 
 // أمر /start
 bot.onText(/\/start/, (msg) => {
-  if (msg.chat.id.toString() !== userId) return;
+  console.log('📥 وصلك أمر /start من:', msg.chat.id);
+
+  if (msg.chat.id.toString() !== userId) {
+    console.log('⛔ تم تجاهل المستخدم غير المصرح له');
+    return;
+  }
+
   bot.sendMessage(msg.chat.id, messages[lang].welcome);
 });
 
-// تحليل السوق كل X ثانية
+// تحليل السوق بشكل دوري
 setInterval(async () => {
   try {
     const results = await analyzeMarket();
