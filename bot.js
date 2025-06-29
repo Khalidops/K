@@ -1,7 +1,8 @@
 // bot.js
 
 const TelegramBot = require('node-telegram-bot-api');
-const { analyzeMarket } = require('./analyzer');
+const { analyzeMarket } = require('./analyzer/marketAnalyzer');
+
 require('dotenv').config();
 
 const token = process.env.BOT_TOKEN;
